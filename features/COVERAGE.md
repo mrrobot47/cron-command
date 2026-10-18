@@ -2,7 +2,7 @@
 
 Run like the other package suites: copy `features/` into a core checkout's `features/` and run `vendor/bin/behat` from the core root as root (`tools/run-behat.sh` pattern). Useful tag filters: `--tags='~@known-bug'` (expected green on develop), `--tags='~@destructive'` (never stops, removes or deliberately breaks the shared scheduler; every cron change still restarts it and regenerates the config, and on a machine with no other cron jobs CRON-1 still removes or loops it when the suite's last job goes), `--tags=@known-bug` (documents open bugs; each fails until fixed). Don't use `--stop-on-failure` or interrupt a run: Behat then skips the `@AfterFeature` cleanup that restores the scheduler and deletes the suite's sites.
 
-Totals: 7 features, 118 scenarios (outline examples expanded). `@known-bug`: 27, `@destructive`: 7 (5 of them also `@known-bug`), `@le`: 0, `@remote`: 0. Neither Let's Encrypt nor rclone is involved in cron-command.
+Totals: 7 features, 118 scenarios (outline examples expanded). `@known-bug`: 28, `@destructive`: 7 (5 of them also `@known-bug`), `@le`: 0, `@remote`: 0. Neither Let's Encrypt nor rclone is involved in cron-command.
 
 Estimated runtime: about 30 minutes for the full suite, dominated by site creation (about 18 php/html sites and one WordPress site), site deletion, the scheduler restart on every cron change, and the schedule-driven waits (two minute-boundary waits, several 10 to 30 second stay-up checks).
 
@@ -36,8 +36,8 @@ Environment: sites are `bh-cron-command-<n>.test` (n = 1 to 16). Host jobs carry
 | `create` on disabled site | cron-create.feature: "A disabled site is rejected" |
 | `create` duplicate job | cron-create.feature: "Creating the same job twice stores two independent jobs" |
 | `cron list <site>` | cron-list.feature: "Listing a site shows its jobs with every column", "Listing a site shows only that site's jobs" |
-| `cron list host` | cron-list.feature: "Listing host shows only host jobs" (`@known-bug` CRON-12: a host job without a user as the first row fails with "Invalid field: user.") |
-| `cron list --all`, site + `--all` | cron-list.feature: "--all lists site and host jobs together", "A site argument wins over --all" |
+| `cron list host` | cron-list.feature: "Listing host shows only host jobs" (`@known-bug` CRON-12: any listed host job without a user fails with "Invalid field: user.") |
+| `cron list --all`, site + `--all` | cron-list.feature: "--all lists site and host jobs together" (`@known-bug` CRON-12), "A site argument wins over --all" |
 | `cron list` from cwd / no site / unknown site | cron-list.feature: "The site is detected from the current directory", "Without a site name ...", "An unknown site is rejected" |
 | `cron list` empty result | cron-list.feature: "A site without jobs reports that nothing was found" |
 | `cron list` disabled site | cron-list.feature: "Listing a disabled site still works" |
@@ -100,6 +100,6 @@ Coverage estimate: about 88% of commands, flags and behaviours (every subcommand
 | CRON-8 | cron-run-now.feature: "Running a host job prints no PHP warnings" |
 | CRON-9 | cron-scheduler.feature: "A site's jobs target its php container again after disable and enable" |
 | CRON-10 | cron-list.feature: "A trailing slash on the site name is ignored" |
-| CRON-12 | cron-list.feature: "Listing host shows only host jobs" |
+| CRON-12 | cron-list.feature: "Listing host shows only host jobs", "--all lists site and host jobs together" |
 
 When `fix/cron-empty-scheduler` (CRON-1) lands, "Deleting the last job keeps the scheduler running" and "The scheduler stays up when the last site with jobs is deleted" flip to passing (drop their `@known-bug` tag); no other scenario changes, and the keepalive `ee-keepalive` section never matches the config steps (they select jobs by `<site>-` name prefix). The CRON-2 and CRON-4 scenarios stay red on that branch.

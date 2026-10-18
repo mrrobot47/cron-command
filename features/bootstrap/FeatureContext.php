@@ -1209,20 +1209,6 @@ class FeatureContext implements Context
 	}
 
 	/**
-	 * Earlier scenarios leave userless host jobs behind; as the first listed row they trip CRON-12. SQL only: the next cron change regenerates the config.
-	 *
-	 * @Given the suite has no host cron jobs without a user
-	 */
-	public function theSuiteHasNoHostCronJobsWithoutAUser()
-	{
-		foreach ( self::ownedCronRows() as $row ) {
-			if ( 'host' === $row['site_url'] && ( null === $row['user'] || '' === $row['user'] ) ) {
-				self::query( 'DELETE FROM cron WHERE id = ?', [ $row['id'] ] );
-			}
-		}
-	}
-
-	/**
 	 * @When I delete every cron job owned by this suite
 	 */
 	public function iDeleteEveryCronJobOwnedByThisSuite()

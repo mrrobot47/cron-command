@@ -38,7 +38,7 @@ Feature: ee cron list
         | site_url               | command                                  |
         | bh-cron-command-4.test | sh -c 'echo bh-cron-command-list-slash'  |
 
-  # CRON-12: format_items() validates the columns against the first row only, and Base::__isset() is false for the NULL user of a host job, so the listing fails with "Invalid field: user.".
+  # CRON-12: format_items() looks up every column on every row, and Base::__isset() is false for the NULL user of a host job, so the listing fails with "Invalid field: user.".
   @known-bug
   Scenario: Listing host shows only host jobs
     Given a php site "bh-cron-command-4.test" exists
@@ -54,10 +54,10 @@ Feature: ee cron list
         | site_url               |
         | bh-cron-command-4.test |
 
-  # The site job must be the first listed row: a host job without a user there hits CRON-12.
+  # CRON-12: any listed host job without a user fails the listing, whatever its position.
+  @known-bug
   Scenario: --all lists site and host jobs together
     Given a php site "bh-cron-command-4.test" exists
-      And the suite has no host cron jobs without a user
     When I run "bin/ee cron create bh-cron-command-4.test --command='echo bh-cron-command-list-all-site' --schedule='@monthly'"
       And I run "bin/ee cron create host --command='echo bh-cron-command-list-all-host' --schedule='@monthly'"
       And I run "bin/ee cron list --all"

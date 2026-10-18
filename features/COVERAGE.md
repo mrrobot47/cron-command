@@ -55,7 +55,7 @@ Environment: sites are `bh-cron-command-<n>.test` (n = 1 to 16). Host jobs carry
 | `update` unknown id | cron-update.feature: "Updating an unknown id fails" (CRON-6, fixed in fix/cron-host-user-and-schedule) |
 | `cron delete <cron-id>` | cron-delete.feature: "Deleting a job removes it from the DB and the config and keeps the others", "Deleting a host job", "Deleting a job of a disabled site" |
 | `delete` twice / unknown / non-numeric / no id / extra args | cron-delete.feature: "Deleting the same job twice fails the second time", "Unknown ids are rejected", "Too many positional arguments are rejected"; cron.feature usage outline |
-| `delete` of the last job | cron-scheduler.feature: "Deleting the last job keeps the scheduler running" (`@known-bug @destructive` CRON-1) |
+| `delete` of the last job | cron-scheduler.feature: "Deleting the last job keeps the scheduler running" (`@destructive`, regression check, CRON-1 fixed in v4.13.1) |
 | `cron run-now <cron-id>` site job, default and custom user, webroot, repeat | cron-run-now.feature: first four scenarios |
 | `run-now` host job (runs on the host) | cron-run-now.feature: "A host job runs on the host" |
 | `run-now` unknown / non-numeric / no id | cron-run-now.feature: "Unknown ids are rejected"; cron.feature usage outline |
@@ -74,7 +74,7 @@ Environment: sites are `bh-cron-command-<n>.test` (n = 1 to 16). Host jobs carry
 | Jobs actually fire on schedule (as the configured user, second-zero semantics) | cron-scheduler.feature: "A site job runs on schedule ...", "A five-field schedule fires at second zero, not every second" |
 | Invalid schedules silently dropped by ofelia | cron-scheduler.feature: "The scheduler never drops a job for an invalid schedule" (CRON-2, fixed in fix/cron-host-user-and-schedule) |
 | `create` boots a stopped or removed scheduler (`init_global_container`) | cron-scheduler.feature: "Creating a job starts a stopped scheduler", "Creating a job after the scheduler was removed brings it back" (both `@destructive`) |
-| Scheduler with zero jobs (restart loop) | cron-scheduler.feature: "The scheduler stays up when the last site with jobs is deleted" (`@known-bug @destructive` CRON-1) |
+| Scheduler with zero jobs (restart loop) | cron-scheduler.feature: "The scheduler stays up when the last site with jobs is deleted" (`@destructive`, regression check, CRON-1 fixed in v4.13.1) |
 | `ee site delete` removes the site's jobs and regenerates config (site-command) | cron-scheduler.feature: "Deleting a site removes its jobs from the DB and the config", "Deleting a WordPress site removes its wp-cron job" |
 | WordPress site create adds `wp cron event run --due-now` every 10 minutes (site-type-wp) and it runs | cron-scheduler.feature: "A WordPress site gets a wp-cron job that runs" |
 | Disable/enable leaves a stale config | cron-scheduler.feature: "A site's jobs target its php container again after disable and enable" (`@known-bug` CRON-9) |
@@ -102,4 +102,4 @@ Coverage estimate: about 88% of commands, flags and behaviours (every subcommand
 | CRON-10 | cron-list.feature: "A trailing slash on the site name is ignored" |
 | CRON-12 | cron-list.feature: "Listing host shows only host jobs", "--all lists site and host jobs together" |
 
-When `fix/cron-empty-scheduler` (CRON-1) lands, "Deleting the last job keeps the scheduler running" and "The scheduler stays up when the last site with jobs is deleted" flip to passing (drop their `@known-bug` tag); no other scenario changes, and the keepalive `ee-keepalive` section never matches the config steps (they select jobs by `<site>-` name prefix). The CRON-2 and CRON-4 scenarios stay red on that branch; `fix/cron-host-user-and-schedule` (built on it) fixes CRON-2, CRON-4, CRON-6, CRON-11 and CRON-12, and their scenarios no longer carry `@known-bug`.
+CRON-1 landed in cron-command v2.1.1 (#60, core v4.13.1), so "Deleting the last job keeps the scheduler running" and "The scheduler stays up when the last site with jobs is deleted" pass and are regular scenarios now; no other scenario changes, and the keepalive `ee-keepalive` section never matches the config steps (they select jobs by `<site>-` name prefix). The CRON-2 and CRON-4 scenarios stay red on that branch; `fix/cron-host-user-and-schedule` (built on it) fixes CRON-2, CRON-4, CRON-6, CRON-11 and CRON-12, and their scenarios no longer carry `@known-bug`.

@@ -135,8 +135,8 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the docker container "services_global-cron_1" should be running
       And the docker container "services_global-cron_1" should stay up for 10 seconds
 
-  # CRON-1: `ee cron delete` of the last job runs `docker rm -f` on the scheduler (fixed locally in fix/cron-empty-scheduler).
-  @known-bug @destructive
+  # CRON-1 (fixed in v4.13.1), regression check: `ee cron delete` of the last job used to run `docker rm -f` on the scheduler.
+  @destructive
   Scenario: Deleting the last job keeps the scheduler running
     Given there are no cron jobs other than the ones owned by this suite
       And a php site "bh-cron-command-14.test" exists
@@ -148,8 +148,8 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the docker container "services_global-cron_1" should be running
       And the docker container "services_global-cron_1" should stay up for 30 seconds
 
-  # CRON-1: with no jobs ofelia exits "unable to start a empty scheduler" and restart: always loops it.
-  @known-bug @destructive
+  # CRON-1 (fixed in v4.13.1), regression check: with no jobs ofelia used to exit "unable to start a empty scheduler" and restart: always looped it.
+  @destructive
   Scenario: The scheduler stays up when the last site with jobs is deleted
     Given there are no cron jobs other than the ones owned by this suite
       And a php site "bh-cron-command-14.test" exists

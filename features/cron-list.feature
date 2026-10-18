@@ -54,9 +54,10 @@ Feature: ee cron list
         | site_url               |
         | bh-cron-command-4.test |
 
-  # The site job comes first: a host job without a user as the first listed row hits CRON-12.
+  # The site job must be the first listed row: a host job without a user there hits CRON-12.
   Scenario: --all lists site and host jobs together
     Given a php site "bh-cron-command-4.test" exists
+      And the suite has no host cron jobs without a user
     When I run "bin/ee cron create bh-cron-command-4.test --command='echo bh-cron-command-list-all-site' --schedule='@monthly'"
       And I run "bin/ee cron create host --command='echo bh-cron-command-list-all-host' --schedule='@monthly'"
       And I run "bin/ee cron list --all"

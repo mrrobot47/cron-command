@@ -22,7 +22,9 @@ if ( 'Darwin' === php_uname( 's' ) ) {
 		$root_alias = '/Users/' . $sys_name;
 	}
 }
-define( 'EE_ROOT_DIR', $root_alias . '/easyengine' );
+if ( ! defined( 'EE_ROOT_DIR' ) ) {
+	define( 'EE_ROOT_DIR', $root_alias . '/easyengine' );
+}
 
 require_once EE_ROOT . '/php/bootstrap.php';
 
@@ -439,6 +441,7 @@ class FeatureContext implements Context
 		$vars = array_merge(
 			[
 				'EE_ROOT_DIR' => EE_ROOT_DIR,
+				'EE_BIN'      => realpath( EE_ROOT . '/bin/ee' ),
 				'CRON_CONFIG' => self::cronConfigPath(),
 			],
 			$this->variables
@@ -850,19 +853,20 @@ class FeatureContext implements Context
 		}
 	}
 
-	/**
-	 * Only looks at log lines written since the container's current start.
-	 *
-	 * @Then the logs of the docker container :name should contain :text within :seconds seconds
-	 */
-	public function theLogsOfTheDockerContainerShouldContain( $name, $text, $seconds )
+	private static function logsSinceStart( $name )
+	{
+		$since = self::inspect( $name, '{{.State.StartedAt}}' );
+
+		return null === $since ? '' : self::shell( 'docker logs --since ' . escapeshellarg( $since ) . ' ' . escapeshellarg( $name ) . ' 2>&1' )->stdout;
+	}
+
+	private function waitForLogs( $name, $text, $seconds )
 	{
 		$name     = $this->replaceVariables( $name );
 		$text     = $this->replaceVariables( $text );
 		$deadline = time() + (int) $seconds;
 		do {
-			$since = self::inspect( $name, '{{.State.StartedAt}}' );
-			$logs  = null === $since ? '' : self::shell( 'docker logs --since ' . escapeshellarg( $since ) . ' ' . escapeshellarg( $name ) . ' 2>&1' )->stdout;
+			$logs = self::logsSinceStart( $name );
 			if ( false !== strpos( $logs, $text ) ) {
 				return;
 			}
@@ -870,6 +874,37 @@ class FeatureContext implements Context
 		} while ( time() < $deadline );
 
 		throw new Exception( "Logs of $name do not contain '$text' within $seconds seconds. Logs since start:\n$logs" );
+	}
+
+	/**
+	 * Only looks at log lines written since the container's current start.
+	 *
+	 * @Then the logs of the docker container :name should contain :text within :seconds seconds
+	 */
+	public function theLogsOfTheDockerContainerShouldContain( $name, $text, $seconds )
+	{
+		$this->waitForLogs( $name, $text, $seconds );
+	}
+
+	/**
+	 * @Then the logs of the docker container :name should contain within :seconds seconds:
+	 */
+	public function theLogsOfTheDockerContainerShouldContainBlock( $name, $seconds, PyStringNode $text )
+	{
+		$this->waitForLogs( $name, $text->getRaw(), $seconds );
+	}
+
+	/**
+	 * @Then the logs of the docker container :name should not contain:
+	 */
+	public function theLogsOfTheDockerContainerShouldNotContainBlock( $name, PyStringNode $text )
+	{
+		$name = $this->replaceVariables( $name );
+		$text = $this->replaceVariables( $text->getRaw() );
+		$logs = self::logsSinceStart( $name );
+		if ( false !== strpos( $logs, $text ) ) {
+			throw new Exception( "Logs of $name unexpectedly contain '$text'. Logs since start:\n$logs" );
+		}
 	}
 
 	/**
@@ -1061,6 +1096,21 @@ class FeatureContext implements Context
 	}
 
 	/**
+	 * @Then the cron job :id should have :field matching :regex
+	 */
+	public function theCronJobShouldHaveMatching( $id, $field, $regex )
+	{
+		$id  = $this->replaceVariables( $id );
+		$row = self::cronRow( $id );
+		if ( ! $row ) {
+			throw new Exception( "Cron job $id does not exist." );
+		}
+		if ( ! preg_match( $regex, (string) $row[ $field ] ) ) {
+			throw new Exception( "Cron job $id has $field '" . $row[ $field ] . "', which does not match $regex." );
+		}
+	}
+
+	/**
 	 * @Then the cron job :id should have an empty :field
 	 */
 	public function theCronJobShouldHaveAnEmpty( $id, $field )
@@ -1084,6 +1134,19 @@ class FeatureContext implements Context
 		$rows = self::query( 'SELECT * FROM cron WHERE site_url = ?', [ $site ] );
 		if ( (int) $count !== count( $rows ) ) {
 			throw new Exception( "Expected $count cron jobs for $site, found " . count( $rows ) . ': ' . json_encode( $rows, JSON_PRETTY_PRINT ) );
+		}
+	}
+
+	/**
+	 * @Then there should be :count cron job(s) for :site with command containing :text
+	 */
+	public function thereShouldBeCronJobsForWithCommandContaining( $count, $site, $text )
+	{
+		$site = $this->replaceVariables( $site );
+		$text = $this->replaceVariables( $text );
+		$rows = self::query( 'SELECT * FROM cron WHERE site_url = ? AND instr(command, ?) > 0', [ $site, $text ] );
+		if ( (int) $count !== count( $rows ) ) {
+			throw new Exception( "Expected $count cron jobs for $site with command containing '$text', found " . count( $rows ) . ': ' . json_encode( $rows, JSON_PRETTY_PRINT ) );
 		}
 	}
 

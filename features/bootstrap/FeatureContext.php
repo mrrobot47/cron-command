@@ -86,6 +86,13 @@ class FeatureContext implements Context
 	public static $cron_container_existed = false;
 
 	/**
+	 * Set when a step removed the scheduler on purpose, so cleanup recreates it even if it was created during the feature.
+	 *
+	 * @var bool
+	 */
+	public static $cron_container_removed = false;
+
+	/**
 	 * Every site, and every host cron command, created by this suite starts with this prefix. Cleanup touches nothing else.
 	 */
 	const TEST_PREFIX = 'bh-cron-command-';
@@ -919,6 +926,21 @@ class FeatureContext implements Context
 		}
 	}
 
+	/**
+	 * @When I remove the docker container :name
+	 */
+	public function iRemoveTheDockerContainer( $name )
+	{
+		$name   = $this->replaceVariables( $name );
+		if ( self::CRON_CONTAINER === $name ) {
+			self::$cron_container_removed = true;
+		}
+		$result = self::shell( 'docker rm -f ' . escapeshellarg( $name ) );
+		if ( 0 !== $result->return_code ) {
+			throw new Exception( "Unable to remove $name.\n" . self::describeResult( $result ) );
+		}
+	}
+
 	/* ---------- Sites ---------- */
 
 	private static function siteRow( $site )
@@ -1105,6 +1127,9 @@ class FeatureContext implements Context
 		if ( ! $row ) {
 			throw new Exception( "Cron job $id does not exist." );
 		}
+		if ( ! array_key_exists( $field, $row ) ) {
+			throw new Exception( "Unknown cron column '$field'." );
+		}
 		if ( ! preg_match( $regex, (string) $row[ $field ] ) ) {
 			throw new Exception( "Cron job $id has $field '" . $row[ $field ] . "', which does not match $regex." );
 		}
@@ -1119,6 +1144,9 @@ class FeatureContext implements Context
 		$row = self::cronRow( $id );
 		if ( ! $row ) {
 			throw new Exception( "Cron job $id does not exist." );
+		}
+		if ( ! array_key_exists( $field, $row ) ) {
+			throw new Exception( "Unknown cron column '$field'." );
 		}
 		if ( null !== $row[ $field ] && '' !== $row[ $field ] ) {
 			throw new Exception( "Cron job $id has $field '" . $row[ $field ] . "', expected none." );
@@ -1192,11 +1220,20 @@ class FeatureContext implements Context
 		}
 	}
 
+	/**
+	 * Drops all but one owned row in SQL, then deletes the last through `ee cron delete`, so the config is regenerated and the shared scheduler restarted once instead of once per job.
+	 */
 	private static function deleteOwnedCronJobs()
 	{
-		foreach ( self::ownedCronRows() as $row ) {
-			self::shell( 'bin/ee cron delete ' . escapeshellarg( $row['id'] ) );
+		$ids = array_column( self::ownedCronRows(), 'id' );
+		if ( ! $ids ) {
+			return;
 		}
+		$last = array_pop( $ids );
+		foreach ( $ids as $id ) {
+			self::query( 'DELETE FROM cron WHERE id = ?', [ $id ] );
+		}
+		self::shell( 'bin/ee cron delete ' . escapeshellarg( $last ) );
 	}
 
 	/* ---------- Cron config (ofelia config.ini) ---------- */
@@ -1307,6 +1344,18 @@ class FeatureContext implements Context
 	}
 
 	/**
+	 * @Then no :type job in the cron config should have :key
+	 */
+	public function noJobInTheCronConfigShouldHave( $type, $key )
+	{
+		foreach ( self::cronConfigJobs() as $job ) {
+			if ( $type === $job['type'] && isset( $job['keys'][ $key ] ) ) {
+				throw new Exception( "Cron config $type job {$job['name']} has $key = {$job['keys'][ $key ]}. Config:\n" . file_get_contents( self::cronConfigPath() ) );
+			}
+		}
+	}
+
+	/**
 	 * @Then the cron config job for :site with command containing :text should target the php container of :target
 	 */
 	public function theCronConfigJobShouldTargetThePhpContainerOf( $site, $text, $target )
@@ -1326,6 +1375,62 @@ class FeatureContext implements Context
 	public static function rememberGlobalState( BeforeFeatureScope $scope )
 	{
 		self::$cron_container_existed = null !== self::inspect( self::CRON_CONTAINER, '{{.Id}}' );
+		self::$cron_container_removed = false;
+	}
+
+	/**
+	 * Brings back a scheduler that a scenario stopped or removed (CRON-1 `docker rm -f`), if it existed before the feature or a step removed it.
+	 */
+	private static function restoreScheduler()
+	{
+		if ( ! self::$cron_container_existed && ! self::$cron_container_removed ) {
+			return;
+		}
+		$running = self::inspect( self::CRON_CONTAINER, '{{.State.Running}}' );
+		if ( null === $running ) {
+			self::shell( 'cd ' . escapeshellarg( EE_ROOT_DIR . '/services' ) . ' && docker-compose -f docker-compose.yml up -d global-cron' );
+		} elseif ( 'true' !== $running ) {
+			self::shell( 'docker start ' . escapeshellarg( self::CRON_CONTAINER ) );
+		}
+	}
+
+	/**
+	 * Jobs firing every few seconds (or every second, CRON-11) must not outlive a scenario that failed before its own delete step.
+	 *
+	 * @AfterScenario
+	 */
+	public function deleteFastOwnedJobs( AfterScenarioScope $scope )
+	{
+		$fast = array_filter(
+			self::ownedCronRows(),
+			function ( $row ) {
+				return preg_match( '/^@every\s+\d+s$/', $row['schedule'] ) || '* * * * *' === trim( $row['schedule'] );
+			}
+		);
+		foreach ( array_column( $fast, 'id' ) as $id ) {
+			self::shell( 'bin/ee cron delete ' . escapeshellarg( $id ) );
+		}
+	}
+
+	/**
+	 * A failed @destructive scenario skips its own restore steps, so the scheduler could stay stopped, or crash-loop on an owned host job with a user (CRON-4) and stop every site's cron.
+	 *
+	 * @AfterScenario @destructive
+	 */
+	public function restoreSchedulerAfterDestructiveScenario( AfterScenarioScope $scope )
+	{
+		$breaking = self::query(
+			"SELECT id FROM cron WHERE site_url = 'host' AND instr(command, ?) > 0 AND user IS NOT NULL AND user != ''",
+			[ self::TEST_PREFIX ]
+		);
+		foreach ( array_column( $breaking, 'id' ) as $id ) {
+			self::shell( 'bin/ee cron delete ' . escapeshellarg( $id ) );
+		}
+		self::restoreScheduler();
+		// A stopped scheduler is always this scenario's doing, even when it was created during the feature.
+		if ( 'false' === self::inspect( self::CRON_CONTAINER, '{{.State.Running}}' ) ) {
+			self::shell( 'docker start ' . escapeshellarg( self::CRON_CONTAINER ) );
+		}
 	}
 
 	/**
@@ -1347,16 +1452,7 @@ class FeatureContext implements Context
 			@unlink( $marker );
 		}
 
-		// `ee cron delete` removes the scheduler when the table empties (CRON-1); put it back if it was there before.
-		if ( self::$cron_container_existed && null === self::inspect( self::CRON_CONTAINER, '{{.Id}}' ) ) {
-			self::shell( 'cd ' . escapeshellarg( EE_ROOT_DIR . '/services' ) . ' && docker-compose -f docker-compose.yml up -d global-cron' );
-		}
-
-		if ( file_exists( 'ee.phar' ) ) {
-			unlink( 'ee.phar' );
-		}
-		if ( file_exists( 'ee-old.phar' ) ) {
-			unlink( 'ee-old.phar' );
-		}
+		// `ee cron delete` removes the scheduler when the table empties (CRON-1).
+		self::restoreScheduler();
 	}
 }

@@ -4,7 +4,9 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
 
   Scenario: Creating a job restarts the scheduler with the new config and ofelia registers it
     Given a php site "bh-cron-command-11.test" exists
-    When I note the start time of the docker container "services_global-cron_1" as "STARTED"
+    # Makes sure the scheduler exists (an earlier cleanup may have removed it, CRON-1) and keeps the table non-empty for this feature.
+    When I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-sched-anchor' --schedule='@yearly'"
+      And I note the start time of the docker container "services_global-cron_1" as "STARTED"
       And I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-reg' --schedule='@hourly'"
     Then the command should succeed
       And the docker container "services_global-cron_1" should have been restarted since "{STARTED}"
@@ -12,6 +14,10 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the logs of the docker container "services_global-cron_1" should contain within 15 seconds:
         """
         New job registered "bh-cron-command-11.test-sh-c-echo-bh-cron-command-reg-
+        """
+      And the logs of the docker container "services_global-cron_1" should not contain:
+        """
+        Failed to register job "bh-cron-command-11.test-sh-c-echo-bh-cron-command-reg-
         """
 
   Scenario: A site job runs on schedule inside the php container as its user
@@ -25,9 +31,12 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
 
   Scenario: A five-field schedule fires at second zero, not every second
     Given a php site "bh-cron-command-11.test" exists
+      And the file "{EE_ROOT_DIR}/sites/bh-cron-command-11.test/app/htdocs/bh-cron-command-minutely.log" does not exist
     When I run "bin/ee cron create bh-cron-command-11.test --command='date +%s >> /var/www/htdocs/bh-cron-command-minutely.log' --schedule='* * * * *'"
       And I store the id of the latest cron job for "bh-cron-command-11.test" with command containing "bh-cron-command-minutely" as "ID"
       And I wait up to 75 seconds until the command "test -s {EE_ROOT_DIR}/sites/bh-cron-command-11.test/app/htdocs/bh-cron-command-minutely.log" succeeds
+      # Long enough for an every-second job to write more than two lines.
+      And After delay of 5 seconds
       And I run "bin/ee cron delete {ID}"
       And I run "test $(wc -l < {EE_ROOT_DIR}/sites/bh-cron-command-11.test/app/htdocs/bh-cron-command-minutely.log) -le 2"
     Then the command should succeed
@@ -36,6 +45,7 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
   @known-bug
   Scenario: A job updated to a five-field schedule still fires once a minute
     Given a php site "bh-cron-command-11.test" exists
+      And the file "{EE_ROOT_DIR}/sites/bh-cron-command-11.test/app/htdocs/bh-cron-command-updminutely.log" does not exist
     When I run "bin/ee cron create bh-cron-command-11.test --command='date +%s >> /var/www/htdocs/bh-cron-command-updminutely.log' --schedule='@yearly'"
       And I store the id of the latest cron job for "bh-cron-command-11.test" with command containing "bh-cron-command-updminutely" as "ID"
       And I run "bin/ee cron update {ID} --schedule='* * * * *'"
@@ -49,7 +59,8 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
   @known-bug
   Scenario: The scheduler never drops a job for an invalid schedule
     Given a php site "bh-cron-command-11.test" exists
-    When I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-badsched' --schedule='99 * * * *'"
+    When I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-sched-anchor2' --schedule='@yearly'"
+      And I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-badsched' --schedule='99 * * * *'"
     Then the logs of the docker container "services_global-cron_1" should contain "Starting scheduler" within 15 seconds
       And the logs of the docker container "services_global-cron_1" should not contain:
       """
@@ -151,14 +162,11 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the file "{CRON_CONFIG}" should not contain "bh-cron-command-lastsite"
       And the docker container "services_global-cron_1" should stay up for 30 seconds
 
+  # Removes the scheduler itself instead of relying on CRON-1, so it runs next to other sites' jobs and still tests init_global_container() once CRON-1 is fixed.
   @destructive
   Scenario: Creating a job after the scheduler was removed brings it back
-    Given there are no cron jobs other than the ones owned by this suite
-      And a php site "bh-cron-command-14.test" exists
-    When I delete every cron job owned by this suite
-      And I run "bin/ee cron create bh-cron-command-14.test --command='echo bh-cron-command-back-a' --schedule='@hourly'"
-      And I store the id of the latest cron job for "bh-cron-command-14.test" with command containing "bh-cron-command-back-a" as "ID"
-      And I run "bin/ee cron delete {ID}"
+    Given a php site "bh-cron-command-14.test" exists
+    When I remove the docker container "services_global-cron_1"
       And I run "bin/ee cron create bh-cron-command-14.test --command='echo bh-cron-command-back-b' --schedule='@hourly'"
     Then the command should succeed
       And the docker container "services_global-cron_1" should be running
@@ -166,13 +174,9 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the cron config should have a "job-exec" job for "bh-cron-command-14.test" with command containing "bh-cron-command-back-b"
 
   # Suspected CRON-4: host jobs keep --user, ofelia rejects `user` in a job-local and the whole scheduler exits, stopping every site's cron.
-  # Kept last: when it fails the broken job stays until the feature cleanup.
+  # Passes whether a fix drops the user or rejects the flag; the @destructive hook deletes the broken job.
   @known-bug @destructive
   Scenario: A host job with --user keeps the scheduler running
     When I run "bin/ee cron create host --command='echo bh-cron-command-host-user' --schedule='@yearly' --user=root"
-      And I store the id of the latest cron job for "host" with command containing "bh-cron-command-host-user" as "ID"
-    Then the cron config job for "host" with command containing "bh-cron-command-host-user" should not have user
+    Then no "job-local" job in the cron config should have "user"
       And the docker container "services_global-cron_1" should stay up for 20 seconds
-    When I run "bin/ee cron delete {ID}"
-    Then the command should succeed
-      And the docker container "services_global-cron_1" should stay up for 10 seconds

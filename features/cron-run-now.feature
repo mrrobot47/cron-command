@@ -29,6 +29,7 @@ Feature: ee cron run-now
 
   Scenario: Running a job twice runs it twice
     Given a php site "bh-cron-command-9.test" exists
+      And the file "{EE_ROOT_DIR}/sites/bh-cron-command-9.test/app/htdocs/bh-cron-command-twice.log" does not exist
     When I run "bin/ee cron create bh-cron-command-9.test --command='echo bh-cron-command-twice >> /var/www/htdocs/bh-cron-command-twice.log' --schedule='@yearly'"
       And I store the id of the latest cron job for "bh-cron-command-9.test" with command containing "bh-cron-command-twice" as "ID"
       And I run "bin/ee cron run-now {ID}"

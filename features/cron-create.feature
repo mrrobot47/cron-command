@@ -190,7 +190,9 @@ Feature: ee cron create
   @known-bug
   Scenario Outline: Invalid schedules are rejected at creation
     Given a php site "bh-cron-command-1.test" exists
-    When I run "bin/ee cron create bh-cron-command-1.test --command='echo <marker>' --schedule='<schedule>'"
+    # A valid job keeps ofelia from exiting when every other job fails to register.
+    When I run "bin/ee cron create bh-cron-command-1.test --command='echo bh-cron-command-anchor' --schedule='@yearly'"
+      And I run "bin/ee cron create bh-cron-command-1.test --command='echo <marker>' --schedule='<schedule>'"
     Then the command should fail
       And there should be 0 cron jobs for "bh-cron-command-1.test" with command containing "<marker>"
 

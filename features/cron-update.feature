@@ -113,11 +113,11 @@ Feature: ee cron update
       And the cron job "{ID}" should have schedule "@hourly"
 
   Scenario: An unknown flag is rejected
-    When I run "bin/ee cron update 1 --schedules='@daily'"
+    When I run "bin/ee cron update 999999 --schedules='@daily'"
     Then the command should fail
       And STDERR should contain "unknown --schedules parameter"
 
-  # CRON-2: update counts non-space characters instead of fields, so any valid schedule with a two-digit value or a step is refused.
+  # CRON-2: update counts non-space characters instead of fields, so any valid schedule with a two-digit value or a step is refused. Also needs CRON-11 (the seconds field) to pass.
   @known-bug
   Scenario Outline: Valid five-field schedules are accepted by update like by create
     Given a php site "bh-cron-command-6.test" exists
@@ -190,9 +190,19 @@ Feature: ee cron update
     When I run "bin/ee cron create bh-cron-command-6.test --command='echo bh-cron-command-upd-tohost' --schedule='@yearly'"
       And I store the id of the latest cron job for "bh-cron-command-6.test" with command containing "bh-cron-command-upd-tohost" as "ID"
       And I run "bin/ee cron update {ID} --site=host"
-    Then the command should succeed
-      And the cron config job for "host" with command containing "bh-cron-command-upd-tohost" should not have user
+    # Passes whether a fix drops the user or rejects the move.
+    Then no "job-local" job in the cron config should have "user"
       And the docker container "services_global-cron_1" should stay up for 20 seconds
-    # Restore the scheduler for the rest of the suite.
+    When I run "bin/ee cron delete {ID}"
+    Then the command should succeed
+
+  # Suspected CRON-4: update writes `user` into a host job's job-local section, which ofelia rejects, so the whole scheduler exits.
+  @known-bug @destructive
+  Scenario: Setting a user on a host job keeps the scheduler running
+    When I run "bin/ee cron create host --command='echo bh-cron-command-upd-hostuser' --schedule='@yearly'"
+      And I store the id of the latest cron job for "host" with command containing "bh-cron-command-upd-hostuser" as "ID"
+      And I run "bin/ee cron update {ID} --user=root"
+    Then no "job-local" job in the cron config should have "user"
+      And the docker container "services_global-cron_1" should stay up for 20 seconds
     When I run "bin/ee cron delete {ID}"
     Then the command should succeed

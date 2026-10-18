@@ -186,8 +186,7 @@ Feature: ee cron create
       | echo bh-cron-command-ini; date           | Command chaining using `;` - semi-colon is not supported |
       | echo bh-cron-command-ini # comment       | EasyEngine does not support commands with #             |
 
-  # CRON-2: schedules are only checked for a leading @ or five fields; ofelia then silently drops the job ("Failed to register job").
-  @known-bug
+  # CRON-2 (fixed in fix/cron-host-user-and-schedule): schedules are only checked for a leading @ or five fields; ofelia then silently drops the job ("Failed to register job").
   Scenario Outline: Invalid schedules are rejected at creation
     Given a php site "bh-cron-command-1.test" exists
     # A valid job keeps ofelia from exiting when every other job fails to register.

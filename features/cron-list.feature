@@ -38,8 +38,7 @@ Feature: ee cron list
         | site_url               | command                                  |
         | bh-cron-command-4.test | sh -c 'echo bh-cron-command-list-slash'  |
 
-  # CRON-12: format_items() looks up every column on every row, and Base::__isset() is false for the NULL user of a host job, so the listing fails with "Invalid field: user.".
-  @known-bug
+  # CRON-12 (fixed in fix/cron-host-user-and-schedule): format_items() looks up every column on every row, and Base::__isset() is false for the NULL user of a host job, so the listing fails with "Invalid field: user.".
   Scenario: Listing host shows only host jobs
     Given a php site "bh-cron-command-4.test" exists
     When I run "bin/ee cron create host --command='echo bh-cron-command-list-host-b' --schedule='@weekly'"
@@ -54,8 +53,7 @@ Feature: ee cron list
         | site_url               |
         | bh-cron-command-4.test |
 
-  # CRON-12: any listed host job without a user fails the listing, whatever its position.
-  @known-bug
+  # CRON-12 (fixed in fix/cron-host-user-and-schedule): any listed host job without a user fails the listing, whatever its position.
   Scenario: --all lists site and host jobs together
     Given a php site "bh-cron-command-4.test" exists
     When I run "bin/ee cron create bh-cron-command-4.test --command='echo bh-cron-command-list-all-site' --schedule='@monthly'"

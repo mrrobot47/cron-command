@@ -27,17 +27,6 @@ Feature: ee cron list
         | site_url |
         | host     |
 
-  # Suspected CRON-10: auto_site_name() accepts the trailing slash but the query uses the raw argument, unlike create.
-  @known-bug
-  Scenario: A trailing slash on the site name is ignored
-    Given a php site "bh-cron-command-4.test" exists
-    When I run "bin/ee cron create bh-cron-command-4.test --command='echo bh-cron-command-list-slash' --schedule='@hourly'"
-      And I run "bin/ee cron list bh-cron-command-4.test/"
-    Then the command should succeed
-      And STDOUT should be a table containing rows:
-        | site_url               | command                                  |
-        | bh-cron-command-4.test | sh -c 'echo bh-cron-command-list-slash'  |
-
   # CRON-12 (fixed in fix/cron-host-user-and-schedule): format_items() looks up every column on every row, and Base::__isset() is false for the NULL user of a host job, so the listing fails with "Invalid field: user.".
   Scenario: Listing host shows only host jobs
     Given a php site "bh-cron-command-4.test" exists

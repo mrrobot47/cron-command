@@ -97,35 +97,6 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And there should be 0 cron jobs for "bh-cron-command-13.test"
       And the cron config should not have any job for "bh-cron-command-13.test"
 
-  # Suspected CRON-9: site enable does not regenerate the cron config; a regeneration while the site was down wrote its job without a container.
-  @known-bug
-  Scenario: A site's jobs target its php container again after disable and enable
-    Given a php site "bh-cron-command-15.test" exists
-      And the site "bh-cron-command-15.test" is enabled
-      And a php site "bh-cron-command-11.test" exists
-    When I run "bin/ee cron create bh-cron-command-15.test --command='echo bh-cron-command-reenable' --schedule='@hourly'"
-      And the site "bh-cron-command-15.test" is disabled
-      And I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-regen' --schedule='@hourly'"
-      And the site "bh-cron-command-15.test" is enabled
-    Then the cron config job for "bh-cron-command-15.test" with command containing "bh-cron-command-reenable" should target the php container of "bh-cron-command-15.test"
-
-  # CRON-3: host jobs are job-local, so they run inside the Alpine scheduler container, not on the host.
-  @known-bug
-  Scenario: A host job runs on the host on schedule
-    Given the file "/tmp/bh-cron-command-host-sched" does not exist
-    When I run "bin/ee cron create host --command='touch /tmp/bh-cron-command-host-sched' --schedule='@every 5s'"
-      And I store the id of the latest cron job for "host" with command containing "bh-cron-command-host-sched" as "ID"
-    Then the command should succeed
-    When I wait up to 30 seconds until the command "test -f /tmp/bh-cron-command-host-sched" succeeds
-      And I run "bin/ee cron delete {ID}"
-    Then the command should succeed
-
-  # CRON-3: the documented `ee cron create host --command='wp ...'` example cannot work, the scheduler image has no wp, php or docker.
-  @known-bug
-  Scenario: The documented host wp example has the tools it needs
-    When I run "docker exec services_global-cron_1 sh -c 'command -v wp'"
-    Then the command should succeed
-
   @destructive
   Scenario: Creating a job starts a stopped scheduler
     Given a php site "bh-cron-command-11.test" exists

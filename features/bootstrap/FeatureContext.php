@@ -425,7 +425,7 @@ class FeatureContext implements Context
 		$result = EE::launch( "docker ps -qf label=$label_string | wc -l", false, true );
 		$running_containers = (int) trim($result->stdout);
 
-		if($expected_running_containers === $running_containers) {
+		if ( (int) $expected_running_containers !== $running_containers ) {
 			throw new Exception("Expected $expected_running_containers running containers. Found: $running_containers");
 		}
 	}

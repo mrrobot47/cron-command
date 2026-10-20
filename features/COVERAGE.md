@@ -2,11 +2,11 @@
 
 Run like the other package suites: copy `features/` into a core checkout's `features/` and run `vendor/bin/behat` from the core root as root. Useful tag filter: `--tags='~@destructive'` (never stops, removes or deliberately breaks the shared scheduler; every cron change still restarts it and regenerates the config, and before v4.13.1, on a machine with no other cron jobs, the scheduler was removed or restart-looped when the suite's last job went). Don't use `--stop-on-failure` or interrupt a run: Behat then skips the `@AfterFeature` cleanup that restores the scheduler and deletes the suite's sites.
 
-Totals: 7 features, 110 scenarios (outline examples expanded). `@destructive`: 7, `@le`: 0, `@remote`: 0. No `@known-bug` scenarios ship here: the 8 scenario rows written for the open bugs listed under Known bugs are held back until their fixes land and then return as regular scenarios. Neither Let's Encrypt nor rclone is involved in cron-command.
+Totals: 7 features, 112 scenarios (outline examples expanded). `@destructive`: 8, `@le`: 0, `@remote`: 0. No `@known-bug` scenarios ship here: the 8 scenario rows written for the open bugs listed under Known bugs are held back until their fixes land and then return as regular scenarios. Neither Let's Encrypt nor rclone is involved in cron-command.
 
 Estimated runtime: about 30 minutes for the full suite, dominated by site creation (about 18 php/html sites and one WordPress site), site deletion, the scheduler restart on every cron change, and the schedule-driven waits (two minute-boundary waits, several 10 to 30 second stay-up checks).
 
-Environment: sites are `bh-cron-command-<n>.test` (n = 1 to 16). Host jobs carry `bh-cron-command-` in their command. The `@AfterFeature` hook deletes only those jobs (in SQL, then one `ee cron delete` so the config is regenerated and the scheduler restarted once) and sites, removes `/tmp/bh-cron-command-*` markers, and starts or recreates `services_global-cron_1` if it existed before the feature or a step removed it (`ee cron delete` of the last job removed it before v4.13.1). After every `@destructive` scenario a hook deletes the suite's host jobs that have a user (they crash-looped the scheduler before v4.13.1) and starts or recreates the scheduler; after every scenario another deletes the suite's jobs that fire every few seconds, in case the scenario failed before its own delete step. The two empty-scheduler scenarios need an empty cron table and fail on their guard step when jobs not owned by the suite exist (any WordPress site has one).
+Environment: sites are `bh-cron-command-<n>.test` (n = 1 to 16). Host jobs carry `bh-cron-command-` in their command. The `@AfterFeature` hook deletes only those jobs (in SQL, then one `ee cron delete` so the config is regenerated and the scheduler restarted once) and sites, removes `/tmp/bh-cron-command-*` markers, and starts or recreates `services_global-cron_1` if it existed before the feature or a step removed it (`ee cron delete` of the last job removed it before v4.13.1). After every `@destructive` scenario a hook deletes the suite's host jobs that have a user (they crash-looped the scheduler before v4.13.1) and starts or recreates the scheduler; after every scenario another deletes the suite's jobs that fire every few seconds, in case the scenario failed before its own delete step. The two empty-scheduler scenarios and the empty-table `list --all` scenario need an empty cron table and fail on their guard step when jobs not owned by the suite exist (any WordPress site has one).
 
 ## Inventory
 
@@ -42,7 +42,7 @@ Environment: sites are `bh-cron-command-<n>.test` (n = 1 to 16). Host jobs carry
 | `cron list` empty result | cron-list.feature: "A site without jobs reports that nothing was found" |
 | `cron list` disabled site | cron-list.feature: "Listing a disabled site still works" |
 | `cron list <site>/` | not covered yet: a trailing slash makes list find no jobs (its scenario comes back with the fix) |
-| `cron list --all` with an empty table | not covered: needs an empty table plus a listing, only meaningful on a dedicated machine |
+| `cron list --all` with an empty table | cron-list.feature: "--all with an empty cron table reports that nothing was found" (`@destructive`) |
 | `http://`/`https://` site names, `update --site=<site>/`, extra positionals on update/run-now/list, `list host --all` | not covered: minor argument handling (`auto_site_name()` strips the scheme only for its lookup, so create/list then fail or find nothing) |
 | `cron update <id>` usage without id | cron.feature: "Subcommands that need an id print their usage without one" |
 | `update --command` | cron-update.feature: "Updating the command wraps it and regenerates the config", "Updating a host job's command" |
@@ -76,13 +76,13 @@ Environment: sites are `bh-cron-command-<n>.test` (n = 1 to 16). Host jobs carry
 | `create` boots a stopped or removed scheduler (`init_global_container`) | cron-scheduler.feature: "Creating a job starts a stopped scheduler", "Creating a job after the scheduler was removed brings it back" (both `@destructive`) |
 | Scheduler with zero jobs (restart loop) | cron-scheduler.feature: "The scheduler stays up when the last site with jobs is deleted" (`@destructive`, regression check, fixed in v4.13.1) |
 | `ee site delete` removes the site's jobs and regenerates config (site-command) | cron-scheduler.feature: "Deleting a site removes its jobs from the DB and the config", "Deleting a WordPress site removes its wp-cron job" |
-| WordPress site create adds `wp cron event run --due-now` every 10 minutes (site-type-wp) and it runs | cron-scheduler.feature: "A WordPress site gets a wp-cron job that runs" |
+| WordPress site create adds `wp cron event run --due-now` every 10 minutes (site-type-wp), `cron list` shows it and it runs | cron-scheduler.feature: "A WordPress site gets a wp-cron job that runs", "cron list shows a WordPress site's wp-cron job" |
 | Disable/enable leaves a stale config | not covered yet: `ee site enable` doesn't regenerate the cron config (its scenario comes back with the fix) |
 | Host jobs run inside the scheduler container, and the documented `wp` example | not covered yet: host jobs run inside the Alpine scheduler container, not on the host (its 2 scenarios come back with the fix) |
 | Migrations (`create_table_cron`, `no_overlap`, `update_cron_user`, `cleanup_old_entries`, `recreate_crons`) and the core `ee-update-cron-config` update step | not covered: they run once during `ee cli update`/migrate and need a crafted pre-upgrade DB; belongs to a core migration suite |
 | macOS paths | not covered: Linux CI only |
 
-Coverage estimate: about 88% of commands, flags and behaviours (every subcommand, positional and flag, every validation branch in `Cron_Command.php`, both helper functions and the site-command/site-type-wp integration points). The gaps are the migrations, an empty-table `list --all` and minor argument handling (scheme-prefixed site names, extra positionals).
+Coverage estimate: about 88% of commands, flags and behaviours (every subcommand, positional and flag, every validation branch in `Cron_Command.php`, both helper functions and the site-command/site-type-wp integration points). The gaps are the migrations and minor argument handling (scheme-prefixed site names, extra positionals).
 
 ## Known bugs
 

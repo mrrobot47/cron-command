@@ -103,3 +103,12 @@ Feature: ee cron list
         | site_url               | command                                      |
         | bh-cron-command-5.test | sh -c 'echo bh-cron-command-list-disabled'   |
       And STDOUT should be a table with 1 row
+
+  # Empties the cron table, so it needs a machine where every job belongs to this suite.
+  @destructive
+  Scenario: --all with an empty cron table reports that nothing was found
+    Given there are no cron jobs other than the ones owned by this suite
+    When I delete every cron job owned by this suite
+      And I run "bin/ee cron list --all"
+    Then the command should fail
+      And STDERR should contain "Error: No cron jobs found."

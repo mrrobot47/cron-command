@@ -90,6 +90,21 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
     Then the command should succeed
       And STDOUT should contain "Executed a total of"
 
+  Scenario: cron list shows a WordPress site's wp-cron job
+    Given a wp site "bh-cron-command-13.test" exists
+    When I store the id of the latest cron job for "bh-cron-command-13.test" with command containing "wp cron event run --due-now" as "ID"
+      And I run "bin/ee cron list bh-cron-command-13.test"
+    Then the command should succeed
+      And STDOUT should be a table containing rows:
+        | id   | site_url                | user     | command                             |
+        | {ID} | bh-cron-command-13.test | www-data | sh -c 'wp cron event run --due-now' |
+      And STDOUT should be a table with 1 row
+    When I run "bin/ee cron list --all"
+    Then the command should succeed
+      And STDOUT should be a table containing rows:
+        | id   | site_url                | command                             |
+        | {ID} | bh-cron-command-13.test | sh -c 'wp cron event run --due-now' |
+
   Scenario: Deleting a WordPress site removes its wp-cron job
     Given a wp site "bh-cron-command-13.test" exists
     When I run "bin/ee site delete bh-cron-command-13.test --yes"

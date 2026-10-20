@@ -1369,7 +1369,7 @@ class FeatureContext implements Context
 	}
 
 	/**
-	 * Brings back a scheduler that a scenario stopped or removed (CRON-1 `docker rm -f`), if it existed before the feature or a step removed it.
+	 * Brings back a scheduler that a scenario stopped or removed (e.g. with `docker rm -f`), if it existed before the feature or a step removed it.
 	 */
 	private static function restoreScheduler()
 	{
@@ -1385,7 +1385,7 @@ class FeatureContext implements Context
 	}
 
 	/**
-	 * Jobs firing every few seconds (or every second, CRON-11) must not outlive a scenario that failed before its own delete step.
+	 * Jobs firing every few seconds (or every second, if update drops the seconds field) must not outlive a scenario that failed before its own delete step.
 	 *
 	 * @AfterScenario
 	 */
@@ -1403,7 +1403,7 @@ class FeatureContext implements Context
 	}
 
 	/**
-	 * A failed @destructive scenario skips its own restore steps, so the scheduler could stay stopped, or crash-loop on an owned host job with a user (CRON-4) and stop every site's cron.
+	 * A failed @destructive scenario skips its own restore steps, so the scheduler could stay stopped, or crash-loop on an owned host job with a user (ofelia rejects `user` in a job-local) and stop every site's cron.
 	 *
 	 * @AfterScenario @destructive
 	 */
@@ -1442,7 +1442,7 @@ class FeatureContext implements Context
 			@unlink( $marker );
 		}
 
-		// `ee cron delete` removes the scheduler when the table empties (CRON-1).
+		// `ee cron delete` removed the scheduler when the table emptied, before v4.13.1.
 		self::restoreScheduler();
 	}
 }

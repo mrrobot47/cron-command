@@ -4,7 +4,7 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
 
   Scenario: Creating a job restarts the scheduler with the new config and ofelia registers it
     Given a php site "bh-cron-command-11.test" exists
-    # Makes sure the scheduler exists (an earlier cleanup may have removed it, CRON-1) and keeps the table non-empty for this feature.
+    # Makes sure the scheduler exists (an earlier cleanup may have removed it) and keeps the table non-empty for this feature.
     When I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-sched-anchor' --schedule='@yearly'"
       And I note the start time of the docker container "services_global-cron_1" as "STARTED"
       And I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-reg' --schedule='@hourly'"
@@ -41,7 +41,7 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And I run "test $(wc -l < {EE_ROOT_DIR}/sites/bh-cron-command-11.test/app/htdocs/bh-cron-command-minutely.log) -le 2"
     Then the command should succeed
 
-  # CRON-11 (fixed in fix/cron-host-user-and-schedule): update drops the seconds field, so '* * * * *' becomes every second in ofelia.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): update drops the seconds field, so '* * * * *' becomes every second in ofelia.
   Scenario: A job updated to a five-field schedule still fires once a minute
     Given a php site "bh-cron-command-11.test" exists
       And the file "{EE_ROOT_DIR}/sites/bh-cron-command-11.test/app/htdocs/bh-cron-command-updminutely.log" does not exist
@@ -54,7 +54,7 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And I run "test $(wc -l < {EE_ROOT_DIR}/sites/bh-cron-command-11.test/app/htdocs/bh-cron-command-updminutely.log) -le 2"
     Then the command should succeed
 
-  # CRON-2 (fixed in fix/cron-host-user-and-schedule): invalid schedules are accepted and ofelia silently skips the job.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): invalid schedules are accepted and ofelia silently skips the job.
   Scenario: The scheduler never drops a job for an invalid schedule
     Given a php site "bh-cron-command-11.test" exists
     When I run "bin/ee cron create bh-cron-command-11.test --command='echo bh-cron-command-sched-anchor2' --schedule='@yearly'"
@@ -106,7 +106,7 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the docker container "services_global-cron_1" should be running
       And the docker container "services_global-cron_1" should stay up for 10 seconds
 
-  # CRON-1 (fixed in v4.13.1), regression check: `ee cron delete` of the last job used to run `docker rm -f` on the scheduler.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60), regression check: `ee cron delete` of the last job used to run `docker rm -f` on the scheduler.
   @destructive
   Scenario: Deleting the last job keeps the scheduler running
     Given there are no cron jobs other than the ones owned by this suite
@@ -119,7 +119,7 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the docker container "services_global-cron_1" should be running
       And the docker container "services_global-cron_1" should stay up for 30 seconds
 
-  # CRON-1 (fixed in v4.13.1), regression check: with no jobs ofelia used to exit "unable to start a empty scheduler" and restart: always looped it.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60), regression check: with no jobs ofelia used to exit "unable to start a empty scheduler" and restart: always looped it.
   @destructive
   Scenario: The scheduler stays up when the last site with jobs is deleted
     Given there are no cron jobs other than the ones owned by this suite
@@ -131,7 +131,7 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the file "{CRON_CONFIG}" should not contain "bh-cron-command-lastsite"
       And the docker container "services_global-cron_1" should stay up for 30 seconds
 
-  # Removes the scheduler itself instead of relying on CRON-1, so it runs next to other sites' jobs and still tests init_global_container() once CRON-1 is fixed.
+  # Removes the scheduler itself instead of relying on `ee cron delete` removing it, so it runs next to other sites' jobs and still tests init_global_container().
   @destructive
   Scenario: Creating a job after the scheduler was removed brings it back
     Given a php site "bh-cron-command-14.test" exists
@@ -142,7 +142,7 @@ Feature: Global cron scheduler (services_global-cron_1, ofelia)
       And the docker container "services_global-cron_1" should stay up for 10 seconds
       And the cron config should have a "job-exec" job for "bh-cron-command-14.test" with command containing "bh-cron-command-back-b"
 
-  # CRON-4 (fixed in fix/cron-host-user-and-schedule): host jobs keep --user, ofelia rejects `user` in a job-local and the whole scheduler exits, stopping every site's cron.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): host jobs keep --user, ofelia rejects `user` in a job-local and the whole scheduler exits, stopping every site's cron.
   # Passes whether a fix drops the user or rejects the flag; the @destructive hook deletes the broken job.
   @destructive
   Scenario: A host job with --user keeps the scheduler running

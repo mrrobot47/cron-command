@@ -117,7 +117,7 @@ Feature: ee cron update
     Then the command should fail
       And STDERR should contain "unknown --schedules parameter"
 
-  # CRON-2 (fixed in fix/cron-host-user-and-schedule): update counts non-space characters instead of fields, so any valid schedule with a two-digit value or a step is refused. Also needs CRON-11 (the seconds field) to pass.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): update counts non-space characters instead of fields, so any valid schedule with a two-digit value or a step is refused. Also needs the seconds-field fix to pass.
   Scenario Outline: Valid five-field schedules are accepted by update like by create
     Given a php site "bh-cron-command-6.test" exists
     When I run "bin/ee cron create bh-cron-command-6.test --command='echo <marker>' --schedule='@hourly'"
@@ -131,7 +131,7 @@ Feature: ee cron update
       | */5 * * * *   | bh-cron-command-upd-step   |
       | 30 2 * * *    | bh-cron-command-upd-2digit |
 
-  # CRON-11 (fixed in fix/cron-host-user-and-schedule): update stores five fields without the seconds field create adds; ofelia reads the first field as seconds, so '* * * * *' runs every second and '0 0 * * *' hourly.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): update stores five fields without the seconds field create adds; ofelia reads the first field as seconds, so '* * * * *' runs every second and '0 0 * * *' hourly.
   Scenario: A five-field schedule gets a seconds field on update too
     Given a php site "bh-cron-command-6.test" exists
     When I run "bin/ee cron create bh-cron-command-6.test --command='echo bh-cron-command-upd-seconds' --schedule='@hourly'"
@@ -141,7 +141,7 @@ Feature: ee cron update
       And the cron job "{ID}" should have schedule "0 0 0 * * *"
       And the cron config job for "bh-cron-command-6.test" with command containing "bh-cron-command-upd-seconds" should have schedule "0 0 0 * * *"
 
-  # CRON-2 (fixed in fix/cron-host-user-and-schedule): a five-character token passes the length check.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): a five-character token passes the length check.
   Scenario: A garbage schedule is rejected by update
     Given a php site "bh-cron-command-6.test" exists
     When I run "bin/ee cron create bh-cron-command-6.test --command='echo bh-cron-command-upd-garbage' --schedule='@hourly'"
@@ -150,14 +150,14 @@ Feature: ee cron update
     Then the command should fail
       And the cron job "{ID}" should have schedule "@hourly"
 
-  # CRON-6 (fixed in fix/cron-host-user-and-schedule): update does not check that the id exists and reports success.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): update does not check that the id exists and reports success.
   Scenario: Updating an unknown id fails
     When I run "bin/ee cron update 999999 --command='echo bh-cron-command-upd-missing'"
     Then the command should fail
       And STDERR should contain "999999"
       And the cron job "999999" should not exist
 
-  # CRON-6 (fixed in fix/cron-host-user-and-schedule): --site is not validated; the job is written to the config as a job-exec without a container.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): --site is not validated; the job is written to the config as a job-exec without a container.
   Scenario: Moving a job to an unknown site fails
     Given a php site "bh-cron-command-6.test" exists
     When I run "bin/ee cron create bh-cron-command-6.test --command='echo bh-cron-command-upd-ghost' --schedule='@hourly'"
@@ -166,7 +166,7 @@ Feature: ee cron update
     Then the command should fail
       And the cron job "{ID}" should have site_url "bh-cron-command-6.test"
 
-  # CRON-6 (fixed in fix/cron-host-user-and-schedule): --site accepts an html site that has no php container.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): --site accepts an html site that has no php container.
   Scenario: Moving a job to a site without php fails
     Given a php site "bh-cron-command-6.test" exists
       And a html site "bh-cron-command-16.test" exists
@@ -177,7 +177,7 @@ Feature: ee cron update
       And STDERR should contain "does not have PHP container."
       And the cron job "{ID}" should have site_url "bh-cron-command-6.test"
 
-  # CRON-4 (fixed in fix/cron-host-user-and-schedule): a site job keeps user=www-data when moved to host; ofelia rejects `user` in a job-local and the whole scheduler exits.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): a site job keeps user=www-data when moved to host; ofelia rejects `user` in a job-local and the whole scheduler exits.
   @destructive
   Scenario: Moving a site job to host keeps the scheduler running
     Given a php site "bh-cron-command-6.test" exists
@@ -190,7 +190,7 @@ Feature: ee cron update
     When I run "bin/ee cron delete {ID}"
     Then the command should succeed
 
-  # CRON-4 (fixed in fix/cron-host-user-and-schedule): update writes `user` into a host job's job-local section, which ofelia rejects, so the whole scheduler exits.
+  # Fixed in v4.13.1 (EasyEngine/cron-command#60): update writes `user` into a host job's job-local section, which ofelia rejects, so the whole scheduler exits.
   @destructive
   Scenario: Setting a user on a host job keeps the scheduler running
     When I run "bin/ee cron create host --command='echo bh-cron-command-upd-hostuser' --schedule='@yearly'"
